@@ -1,38 +1,74 @@
 import 'source-map-support/register'
+import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyHandler } from 'aws-lambda'
+import * as AWS from 'aws-sdk'
+import {parseUserId } from '../../auth/utils'
+import * as AWSXRay from 'aws-xray-sdk'
 
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-  APIGatewayProxyHandler
-} from 'aws-lambda'
-import { deleteTodo } from '../../businessLogic/Todo'
-import { createLogger } from '../../utils/logger'
-import * as middy from 'middy'
-import { cors } from 'middy/middlewares'
+const XAWS = AWSXRay.captureAWS(AWS)
 
-const logger = createLogger('deleteTodo')
+const docClient = new XAWS.DynamoDB.DocumentClient()
+const todosTable = process.env.TODOS_TABLE
 
-export const handler = middy(
-  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    // TODO: Remove a TODO item by id
-    logger.info('Processing Event ', event)
-    const authorization = event.headers.Authorization
-    const split = authorization.split(' ')
-    const jwtToken = split[1]
+export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const todoId = event.pathParameters.todoId
+  console.log("todoId ", todoId)
+  const authorization = event.headers.Authorization
+  const split = authorization.split(' ')
+  const jwtToken = split[1]
 
-    const todoId = event.pathParameters.todoId
-
-    const deleteData = await deleteTodo(todoId, jwtToken)
-
-    return {
-      statusCode: 200,
-      body: deleteData
+  const validTodoId = await todoExists(todoId)
+  console.log("def")
+  if (!validTodoId){
+    return{
+      statusCode:404,
+      headers:{
+        'Access-Control-Allow-Origin': "*"
+      },
+      body: JSON.stringify({
+        error: 'Todo does not exist'
+      })
     }
   }
-)
 
-handler.use(
-  cors({
-    credentials: true
+  console.log("abc")
+  //
+  var params = {
+    TableName: todosTable,
+    userId: parseUserId(jwtToken),
+    Key: {
+      todoId: todoId
+    }
+  }
+  console.log("params", params)
+  //
+  docClient.delete(params, function(err, data) {
+    if (err) {
+        console.error("Unable to delete item. Error JSON:", JSON.stringify(err, null, 2))
+    } else {
+        console.log("DeleteItem succeeded:", JSON.stringify(data, null, 2))
+    }
   })
-)
+  // TODO: Remove a TODO item by id
+  return {
+    statusCode: 201,
+    headers: {
+      'Access-Control-Allow-Origin': '*'
+    },
+    body:'Item deleted'
+  }
+}
+
+
+async function todoExists(todoId: string){
+  const result = await docClient
+    .get({
+      TableName: todosTable,
+      Key:{
+        todoId: todoId
+      }
+    })
+    .promise()
+
+    console.log('Get todo: ', result)
+    return !!result.Item
+}

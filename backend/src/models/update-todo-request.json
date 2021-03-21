@@ -1,6 +1,6 @@
 {
-  "$schema": "http://json-schema.org/draft-04/schema",
-  "title": "todoUpdate",
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "todo",
   "type": "object",
   "properties": {
     "name": {
@@ -9,10 +9,14 @@
     "dueDate": {
       "type": "string"
     },
-    "done": {
+    "done":{
       "type": "boolean"
     }
   },
-  "required": ["name", "dueDate", "done"],
+  "required": [
+    "name",
+    "dueDate",
+    "done"
+  ],
   "additionalProperties": false
 }

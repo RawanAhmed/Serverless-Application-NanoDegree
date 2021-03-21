@@ -1,35 +1,47 @@
 import 'source-map-support/register'
-import {APIGatewayProxyEvent,APIGatewayProxyHandler,APIGatewayProxyResult} from 'aws-lambda'
+import { APIGatewayProxyEvent, APIGatewayProxyHandler, APIGatewayProxyResult } from 'aws-lambda'
 import { CreateTodoRequest } from '../../requests/CreateTodoRequest'
-import { createTodo } from '../../businessLogic/Todo'
-import { createLogger } from '../../utils/logger'
-import * as middy from 'middy'
-import { cors } from 'middy/middlewares'
+import * as AWS from 'aws-sdk'
+import * as uuid from 'uuid'
+import {parseUserId } from '../../auth/utils'
+import * as AWSXRay from 'aws-xray-sdk'
 
-const logger = createLogger('createTodo')
+const XAWS = AWSXRay.captureAWS(AWS)
 
-export const handler = middy(
-  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    // TODO: Implement creating a new TODO item
-    logger.info('Processing Event ', event)
-    const authorization = event.headers.Authorization
-    const split = authorization.split(' ')
-    const jwtToken = split[1]
+const docClient = new XAWS.DynamoDB.DocumentClient()
+const todosTable = process.env.TODOS_TABLE
 
-    const newTodo: CreateTodoRequest = JSON.parse(event.body)
-    const toDoItem = await createTodo(newTodo, jwtToken)
+export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  console.log('Processing event: ', event)
+  const itemId = uuid.v4()
 
-    return {
-      statusCode: 201,
-      body: JSON.stringify({
-        item: toDoItem
-      })
-    }
+  const authorization = event.headers.Authorization
+  const split = authorization.split(' ')
+  const jwtToken = split[1]
+
+  const newTodo: CreateTodoRequest = JSON.parse(event.body)
+
+  const newItem = {
+    todoId: itemId,
+    userId: parseUserId(jwtToken),
+    ...newTodo
   }
-)
 
-handler.use(
-  cors({
-    credentials: true
-  })
-)
+  await docClient.put({
+    TableName: todosTable,
+    Item: newItem
+  }).promise()
+
+
+  // TODO: Implement creating a new TODO item
+  return {
+    statusCode: 201,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Credentials': true
+    },
+    body: JSON.stringify({
+      newItem
+    })
+  }
+}

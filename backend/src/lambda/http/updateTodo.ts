@@ -1,36 +1,94 @@
 import 'source-map-support/register'
-
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda'
+import { APIGatewayProxyEvent, APIGatewayProxyHandler, APIGatewayProxyResult } from 'aws-lambda'
 import { UpdateTodoRequest } from '../../requests/UpdateTodoRequest'
-import { updateTodo } from '../../businessLogic/Todo'
+import * as AWS from 'aws-sdk'
+import {parseUserId } from '../../auth/utils'
+import * as AWSXRay from 'aws-xray-sdk'
 
-import * as middy from 'middy'
-import { cors } from 'middy/middlewares'
+const XAWS = AWSXRay.captureAWS(AWS)
 
-export const handler = middy(
-  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    // TODO: Update a TODO item with the provided id using values in the "updatedTodo" object
-    console.log('Processing Event ', event)
-    const authorization = event.headers.Authorization
-    const split = authorization.split(' ')
-    const jwtToken = split[1]
+const docClient = new XAWS.DynamoDB.DocumentClient()
+const todosTable = process.env.TODOS_TABLE
 
-    const todoId = event.pathParameters.todoId
-    const updatedTodo: UpdateTodoRequest = JSON.parse(event.body)
+export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  console.log("Caller event", event)
+  const todoId = event.pathParameters.todoId
+  console.log("todoId ", todoId)
 
-    const toDoItem = await updateTodo(updatedTodo, todoId, jwtToken)
+  const validTodoId = await todoExists(todoId)
 
-    return {
-      statusCode: 200,
+  if (!validTodoId){
+    return{
+      statusCode:404,
+      headers:{
+        'Access-Control-Allow-Origin': "*"
+      },
       body: JSON.stringify({
-        item: toDoItem
+        error: 'Todo does not exist'
       })
     }
   }
-)
 
-handler.use(
-  cors({
-    credentials: true
-  })
-)
+  const authorization = event.headers.Authorization
+  const split = authorization.split(' ')
+  const jwtToken = split[1]
+
+  const oldTodoId = await retrieveOld(todoId)
+  console.log(oldTodoId.CreatedAt)
+
+  const updatedTodo: UpdateTodoRequest = JSON.parse(event.body)
+
+  console.log("updatedtodo ", updatedTodo)
+
+  const updatedItem = {
+    todoId: todoId,
+    userId: parseUserId(jwtToken),
+    createdAt: oldTodoId.createdAt,
+    attachmentUrl: oldTodoId.attachmentUrl,
+    ...updatedTodo
+  }
+
+  console.log("updateditem is ", updatedItem)
+
+  await docClient.put({
+    TableName: todosTable,
+    Item: updatedItem
+  }).promise()
+
+
+  // TODO: Update a TODO item with the provided id using values in the "updatedTodo" object
+  return {
+    statusCode: 201,
+    headers: {
+      'Access-Control-Allow-Origin': '*'
+    },
+    body: JSON.stringify({
+      updatedItem
+    })
+  }
+}
+
+async function todoExists(todoId: string){
+  const result = await docClient
+    .get({
+      TableName: todosTable,
+      Key:{
+        todoId: todoId
+      }
+    })
+    .promise()
+
+    console.log('Get todo: ', result)
+    return !!result.Item
+}
+
+async function retrieveOld(todoId: string){
+  const result = await docClient.get({
+    TableName: todosTable,
+    Key:{
+      todoId: todoId
+    }
+  }).promise()
+
+  return result.Item
+}

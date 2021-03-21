@@ -47,14 +47,24 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
   onTodoCreate = async (event: React.ChangeEvent<HTMLButtonElement>) => {
     try {
       const dueDate = this.calculateDueDate()
+      const createdDate = this.getcreatedDate()
+      const donetask = false
+      const attachmentUrl = "www.image.com/cat.png"
       const newTodo = await createTodo(this.props.auth.getIdToken(), {
         name: this.state.newTodoName,
-        dueDate
+        dueDate: dueDate,
+        createdAt: createdDate,
+        done: donetask,
+        attachmentUrl: attachmentUrl
       })
+
+      console.log('mynewtodo', newTodo)
+
       this.setState({
         todos: [...this.state.todos, newTodo],
         newTodoName: ''
       })
+      alert('Todo creation success')
     } catch {
       alert('Todo creation failed')
     }
@@ -64,8 +74,9 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
     try {
       await deleteTodo(this.props.auth.getIdToken(), todoId)
       this.setState({
-        todos: this.state.todos.filter((todo) => todo.todoId != todoId)
+        todos: this.state.todos.filter(todo => todo.todoId != todoId)
       })
+      alert('Todo deletion success')
     } catch {
       alert('Todo deletion failed')
     }
@@ -85,17 +96,19 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
         })
       })
     } catch {
-      alert('Todo deletion failed')
+      alert('Todo update failed')
     }
   }
 
   async componentDidMount() {
     try {
       const todos = await getTodos(this.props.auth.getIdToken())
+      console.log("mightymouse", todos)
       this.setState({
         todos,
         loadingTodos: false
       })
+      // alert('Attachment update success')
     } catch (e) {
       alert(`Failed to fetch todos: ${e.message}`)
     }
@@ -159,7 +172,6 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
   renderTodosList() {
     return (
       <Grid padded>
-        {!this.state.todos && <div>Create some todos</div>}
         {this.state.todos.map((todo, pos) => {
           return (
             <Grid.Row key={todo.todoId}>
@@ -209,6 +221,11 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
   calculateDueDate(): string {
     const date = new Date()
     date.setDate(date.getDate() + 7)
+
+    return dateFormat(date, 'yyyy-mm-dd') as string
+  }
+  getcreatedDate(): string {
+    const date = new Date()
 
     return dateFormat(date, 'yyyy-mm-dd') as string
   }
