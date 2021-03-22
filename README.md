@@ -2,6 +2,41 @@
 
 To implement this project, you need to implement a simple TODO application using AWS Lambda and Serverless framework. Search for all comments starting with the `TODO:` in the code to find the placeholders that you need to implement.
 
+
+# To Run Frontend Client
+
+To Run Client please check to go to file and clear port 3000  to appear in http://localhost:3000/
+then run commands :
+
+npm install
+
+npm start 
+
+The page be like after login :
+
+![Alt text](images/Serveless_Project.png?raw=true "Image 1")
+
+# To Run Backend 
+
+Must run commands to run backend :
+
+npm install aws-sdk
+
+npm install serverless-webpack --save-dev
+
+npm i serverless-iam-roles-per-function@next
+
+npm install serverless-aws-documentation --save-dev
+
+npm install serverless-reqvalidator-plugin
+
+npm install 
+
+serverless config credentials --provider aws --key USER_KEY --secret USER_SECRET_KEY --profile PROFILE_NAME
+
+serverless deploy -v --aws-profile PROFILE_NAME
+
+
 # Functionality of the application
 
 This application will allow creating/removing/updating/fetching TODO items. Each TODO item can optionally have an attachment image. Each user only has access to TODO items that he/she has created.
